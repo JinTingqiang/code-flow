@@ -1,8 +1,10 @@
 import * as vscode from 'vscode';
+import * as cp from 'child_process';
 import { FlowBookmark, FlowGroup, BookmarksState } from './types';
 
 /**
  * 书签管理器 — 支持多分组，每个分组内按流程顺序管理书签
+ * 存储策略：workspaceState + 项目文件 + globalState（按 git remote 同步）
  */
 export class BookmarkManager {
   private static readonly STATE_KEY = 'codeFlow.bookmarksState';
@@ -12,6 +14,7 @@ export class BookmarkManager {
   private activeGroupId: string;
   private currentIndex: number;
   private nextOrder: number;
+  private globalKey: string = '';
 
   private _onDidChangeBookmarks = new vscode.EventEmitter<FlowBookmark[]>();
   private _onDidChangeCurrentIndex = new vscode.EventEmitter<number>();
@@ -24,6 +27,7 @@ export class BookmarkManager {
   readonly onDidChangeActiveGroup = this._onDidChangeActiveGroup.event;
 
   constructor(private context: vscode.ExtensionContext) {
+    // 先加载 workspaceState
     const saved = context.workspaceState.get<BookmarksState>(
       BookmarkManager.STATE_KEY
     );
@@ -33,14 +37,16 @@ export class BookmarkManager {
     this.currentIndex = saved?.currentIndex ?? -1;
     this.nextOrder = saved?.nextOrder ?? 0;
 
-    // 排序
     this.groups.sort((a, b) => a.order - b.order);
     this.bookmarks.sort((a, b) => a.order - b.order);
 
-    // 确保有默认分组
     if (this.groups.length === 0) {
       this.createDefaultGroup();
     }
+
+    // 异步加载跨 clone 共享数据
+    this.loadFromProjectFile();
+    this.detectGitRemoteAndSync();
   }
 
   // ─── 默认分组 ──────────────────────────────────
@@ -772,6 +778,138 @@ export class BookmarkManager {
       nextOrder: this.nextOrder,
     };
     this.context.workspaceState.update(BookmarkManager.STATE_KEY, state);
+    this.saveToProjectFile(state);
+    this.saveToGlobalState(state);
+  }
+
+  private saveToGlobalState(state: BookmarksState): void {
+    if (!this.globalKey) return;
+    this.context.globalState.update(
+      `${BookmarkManager.STATE_KEY}.${this.globalKey}`,
+      state
+    );
+  }
+
+  private async detectGitRemoteAndSync(): Promise<void> {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) return;
+
+    try {
+      const remote = await this.getGitRemote(folder.uri.fsPath);
+      if (!remote) return;
+
+      // 用 git remote URL 的简短形式作为 key
+      this.globalKey = remote
+        .replace(/^https?:\/\//, '')
+        .replace(/\.git$/, '')
+        .replace(/[\/\\:@]/g, '_');
+
+      // 尝试从 globalState 加载（跨 clone 同步）
+      const stateKey = `${BookmarkManager.STATE_KEY}.${this.globalKey}`;
+      const globalSaved = this.context.globalState.get<BookmarksState>(stateKey);
+
+      if (globalSaved && globalSaved.bookmarks?.length > 0) {
+        // 只在本地没有数据时才从 global 恢复
+        if (this.bookmarks.length === 0 && this.groups.length <= 1) {
+          const defaultGroup = this.groups[0];
+          this.groups = globalSaved.groups;
+          this.bookmarks = globalSaved.bookmarks;
+          this.activeGroupId = globalSaved.activeGroupId || '';
+          this.currentIndex = globalSaved.currentIndex ?? -1;
+          this.groups.sort((a, b) => a.order - b.order);
+          this.bookmarks.sort((a, b) => a.order - b.order);
+          if (this.groups.length === 0) {
+            this.groups.push(defaultGroup);
+            this.activeGroupId = defaultGroup.id;
+          }
+          this._onDidChangeGroups.fire(this.getAllGroups());
+          this._onDidChangeBookmarks.fire(this.getAll());
+          this._onDidChangeActiveGroup.fire(this.activeGroupId);
+          this._onDidChangeCurrentIndex.fire(this.currentIndex);
+
+          // 同步到本地 workspaceState
+          this.persist();
+        }
+      } else if (this.bookmarks.length > 0) {
+        // 本地有数据但 global 没有 → 把本地数据推送到 global
+        this.saveToGlobalState({
+          groups: this.groups,
+          bookmarks: this.bookmarks,
+          activeGroupId: this.activeGroupId,
+          currentIndex: this.currentIndex,
+          nextOrder: this.nextOrder,
+        });
+      }
+    } catch {
+      // 获取 git remote 失败，忽略
+    }
+  }
+
+  private getGitRemote(cwd: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      cp.exec('git remote get-url origin', { cwd, timeout: 3000 }, (err, stdout) => {
+        if (err) {
+          resolve(null);
+        } else {
+          resolve(stdout.trim() || null);
+        }
+      });
+    });
+  }
+
+  private getStorageUri(): vscode.Uri | undefined {
+    const folder = vscode.workspace.workspaceFolders?.[0];
+    if (!folder) return undefined;
+    return vscode.Uri.joinPath(folder.uri, '.vscode', 'code-flow-bookmarks.json');
+  }
+
+  private saveToProjectFile(state: BookmarksState): void {
+    const uri = this.getStorageUri();
+    if (!uri) return;
+    try {
+      const dir = vscode.Uri.joinPath(uri, '..');
+      vscode.workspace.fs.createDirectory(dir).then(() => {
+        const data = Buffer.from(JSON.stringify(state, null, 2), 'utf-8');
+        vscode.workspace.fs.writeFile(uri, data);
+      });
+    } catch {
+      // 静默失败
+    }
+  }
+
+  private async loadFromProjectFile(): Promise<void> {
+    const uri = this.getStorageUri();
+    if (!uri) return;
+
+    try {
+      const data = await vscode.workspace.fs.readFile(uri);
+      const state: BookmarksState = JSON.parse(Buffer.from(data).toString('utf-8'));
+      if (!state.groups || !state.bookmarks) return;
+
+      // 只在当前 workspace 没有数据时才从文件加载
+      if (this.bookmarks.length === 0 && this.groups.length <= 1) {
+        const defaultGroup = this.groups[0];
+        this.groups = state.groups;
+        this.bookmarks = state.bookmarks;
+        this.activeGroupId = state.activeGroupId || '';
+        this.currentIndex = state.currentIndex ?? -1;
+        this.nextOrder = state.nextOrder ?? 0;
+        this.groups.sort((a, b) => a.order - b.order);
+        this.bookmarks.sort((a, b) => a.order - b.order);
+
+        if (this.groups.length === 0) {
+          this.groups.push(defaultGroup);
+          this.activeGroupId = defaultGroup.id;
+        }
+
+        this._onDidChangeGroups.fire(this.getAllGroups());
+        this._onDidChangeBookmarks.fire(this.getAll());
+        this._onDidChangeActiveGroup.fire(this.activeGroupId);
+        this._onDidChangeCurrentIndex.fire(this.currentIndex);
+      }
+    } catch {
+      // 文件不存在，正常
+    }
   }
 
   // ─── 工具方法 ──────────────────────────────────
