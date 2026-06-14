@@ -1,0 +1,453 @@
+{
+  "name": "code-flow-bookmarks",
+  "displayName": "Code Flow Bookmarks",
+  "description": "为梳理代码流程而生的书签插件 — 在代码行打书签，按自定义顺序逐个跳转，像断点一样追踪代码流程",
+  "version": "0.1.0",
+  "publisher": "codeflow",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codeflow/code-flow-bookmarks"
+  },
+  "engines": {
+    "vscode": "^1.82.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "bookmark",
+    "bookmarks",
+    "code flow",
+    "flow",
+    "navigation",
+    "trace",
+    "流程",
+    "书签",
+    "跳转"
+  ],
+  "icon": "icon.png",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "codeFlow.toggleBookmark",
+        "title": "CF: Toggle Flow Bookmark",
+        "icon": "$(bookmark)"
+      },
+      {
+        "command": "codeFlow.nextInFlow",
+        "title": "CF: Next in Flow",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "codeFlow.previousInFlow",
+        "title": "CF: Previous in Flow",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "codeFlow.jumpToBookmark",
+        "title": "CF: Jump to Bookmark",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "codeFlow.removeBookmark",
+        "title": "CF: Remove Bookmark",
+        "icon": "$(close)"
+      },
+      {
+        "command": "codeFlow.clearAllBookmarks",
+        "title": "CF: Clear Active Group Bookmarks",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "codeFlow.renameBookmark",
+        "title": "CF: Rename Bookmark",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "codeFlow.toggleBookmarkWithLabel",
+        "title": "CF: Toggle Bookmark with Label",
+        "icon": "$(bookmark)"
+      },
+      {
+        "command": "codeFlow.moveBookmarkUp",
+        "title": "CF: Move Up in Flow",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "codeFlow.moveBookmarkDown",
+        "title": "CF: Move Down in Flow",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "codeFlow.goToFlowStart",
+        "title": "CF: Go to Flow Start",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "codeFlow.addAfterCurrent",
+        "title": "CF: Add Bookmark After Current",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codeFlow.createGroup",
+        "title": "CF: Create Group",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "codeFlow.setActiveGroup",
+        "title": "CF: Set Active Group",
+        "icon": "$(folder-active)"
+      },
+      {
+        "command": "codeFlow.renameGroup",
+        "title": "CF: Rename Group",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "codeFlow.setGroupColor",
+        "title": "CF: Set Group Color",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "codeFlow.deleteGroup",
+        "title": "CF: Delete Group",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "codeFlow.moveGroupUp",
+        "title": "CF: Move Group Up",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "codeFlow.moveGroupDown",
+        "title": "CF: Move Group Down",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "codeFlow.importFlowMD",
+        "title": "CF: Import Flow from Markdown",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "codeFlow.clearGroupBookmarks",
+        "title": "CF: Clear Group Bookmarks",
+        "icon": "$(close-all)"
+      },
+      {
+        "command": "codeFlow.hideGroup",
+        "title": "CF: Hide Group",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "codeFlow.unhideGroup",
+        "title": "CF: Unhide Group",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "codeFlow.openSettingsMenu",
+        "title": "CF: Open Settings Menu",
+        "icon": "$(gear)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "codeFlow.toggleBookmark",
+        "key": "Alt+F9",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeFlow.addAfterCurrent",
+        "key": "Alt+Shift+F9",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeFlow.nextInFlow",
+        "key": "F9",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeFlow.previousInFlow",
+        "key": "Shift+F9",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeFlow.clearAllBookmarks",
+        "key": "Ctrl+Shift+F9",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeFlow.toggleBookmarkWithLabel",
+        "key": "Ctrl+Alt+F9",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "codeFlow.goToFlowStart",
+        "key": "Ctrl+F9",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/gutter": [
+        {
+          "command": "codeFlow.toggleBookmark",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "codeFlow.toggleBookmark",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        },
+        {
+          "command": "codeFlow.toggleBookmarkWithLabel",
+          "group": "navigation",
+          "when": "editorTextFocus"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "codeFlow.createGroup",
+          "group": "navigation@1",
+          "when": "view == codeFlow.flowTree"
+        },
+        {
+          "command": "codeFlow.setActiveGroup",
+          "group": "navigation@2",
+          "when": "view == codeFlow.flowTree"
+        },
+        {
+          "command": "codeFlow.goToFlowStart",
+          "group": "navigation@3",
+          "when": "view == codeFlow.flowTree"
+        },
+        {
+          "command": "codeFlow.clearAllBookmarks",
+          "group": "navigation@4",
+          "when": "view == codeFlow.flowTree"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "codeFlow.importFlowMD",
+          "group": "inline@0",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.clearGroupBookmarks",
+          "group": "inline@1",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.unhideGroup",
+          "group": "inline@2",
+          "when": "view == codeFlow.flowTree && viewItem =~ /hidden/"
+        },
+        {
+          "command": "codeFlow.hideGroup",
+          "group": "inline@2",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/ && !(viewItem =~ /hidden/)"
+        },
+        {
+          "command": "codeFlow.setActiveGroup",
+          "group": "group@1",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.renameGroup",
+          "group": "group@2",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.setGroupColor",
+          "group": "group@3",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.moveGroupUp",
+          "group": "group@4",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.moveGroupDown",
+          "group": "group@5",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.deleteGroup",
+          "group": "group@6",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
+        {
+          "command": "codeFlow.jumpToBookmark",
+          "group": "bookmark@1",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowBookmark/"
+        },
+        {
+          "command": "codeFlow.renameBookmark",
+          "group": "bookmark@2",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowBookmark/"
+        },
+        {
+          "command": "codeFlow.moveBookmarkUp",
+          "group": "bookmark@3",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowBookmark/"
+        },
+        {
+          "command": "codeFlow.moveBookmarkDown",
+          "group": "bookmark@4",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowBookmark/"
+        },
+        {
+          "command": "codeFlow.removeBookmark",
+          "group": "bookmark@5",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowBookmark/"
+        }
+      ]
+    },
+    "views": {
+      "codeFlowSidebar": [
+        {
+          "id": "codeFlow.flowTree",
+          "name": "Code Flow",
+          "icon": "$(debug-step-over)",
+          "contextualTitle": "Code Flow Bookmarks"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codeFlowSidebar",
+          "title": "Code Flow",
+          "icon": "$(debug-step-over)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Code Flow Bookmarks",
+      "properties": {
+        "codeFlow.lineHighlight": {
+          "type": "boolean",
+          "default": true,
+          "description": "高亮书签所在行"
+        },
+        "codeFlow.lineHighlightStyle": {
+          "type": "string",
+          "default": "background",
+          "enum": [
+            "background",
+            "left-border",
+            "underline",
+            "outline"
+          ],
+          "enumDescriptions": [
+            "背景色高亮",
+            "左侧边框高亮",
+            "下划线高亮",
+            "轮廓高亮"
+          ],
+          "description": "行高亮样式"
+        },
+        "codeFlow.highlightColor": {
+          "type": "string",
+          "default": "#FFB300",
+          "description": "高亮颜色（当前流程位置）"
+        },
+        "codeFlow.bookmarkColor": {
+          "type": "string",
+          "default": "#29B6F6",
+          "description": "书签颜色（非当前流程位置）"
+        },
+        "codeFlow.opacity": {
+          "type": "number",
+          "default": 0.3,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "高亮透明度 (0-1)"
+        },
+        "codeFlow.flashHighlight": {
+          "type": "boolean",
+          "default": true,
+          "description": "跳转时闪烁高亮目标行"
+        },
+        "codeFlow.flashDuration": {
+          "type": "number",
+          "default": 600,
+          "description": "闪烁高亮时长（毫秒）"
+        },
+        "codeFlow.scrollAnimation": {
+          "type": "string",
+          "default": "all",
+          "enum": [
+            "none",
+            "sameFileOnly",
+            "all"
+          ],
+          "enumDescriptions": [
+            "无动画",
+            "仅同文件内动画",
+            "全部使用动画"
+          ],
+          "description": "跳转时的滚动动画"
+        },
+        "codeFlow.allowCrossFileJump": {
+          "type": "boolean",
+          "default": true,
+          "description": "允许跨文件跳转"
+        },
+        "codeFlow.gutterIconSize": {
+          "type": "string",
+          "default": "medium",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "description": "装订线图标大小"
+        },
+        "codeFlow.showLineNumbers": {
+          "type": "boolean",
+          "default": true,
+          "description": "装订线图标中显示流程序号"
+        },
+        "codeFlow.activeFlowIndicator": {
+          "type": "string",
+          "default": "►",
+          "description": "当前流程位置的指示标记"
+        },
+        "codeFlow.autoSelectInTree": {
+          "type": "boolean",
+          "default": true,
+          "description": "跳转时自动在树视图中选中对应书签"
+        },
+        "codeFlow.confirmBeforeClear": {
+          "type": "boolean",
+          "default": true,
+          "description": "清除所有书签前确认"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.82.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
