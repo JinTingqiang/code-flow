@@ -37,10 +37,18 @@ export class FlowTreeProvider
 
   getChildren(element?: FlowTreeItem): vscode.ProviderResult<FlowTreeItem[]> {
     if (!element) {
-      return this.createGroupItems();
+      // 根级别 — 顶级分组
+      return this.createGroupItems(undefined);
     }
     if (element.group && !element.bookmark) {
-      return this.createBookmarkItems(element.group.id);
+      // 分组节点 — 子分组 + 书签
+      const children: FlowTreeItem[] = [];
+      // 子分组
+      const childGroups = this.bookmarkManager.getChildGroups(element.group.id);
+      children.push(...childGroups.map((g) => this.createGroupItem(g, vscode.TreeItemCollapsibleState.Collapsed)));
+      // 书签
+      children.push(...this.createBookmarkItems(element.group.id));
+      return children;
     }
     return [];
   }
@@ -50,6 +58,12 @@ export class FlowTreeProvider
       const group = this.bookmarkManager.getGroup(element.bookmark.groupId);
       if (group) {
         return this.createGroupItem(group, vscode.TreeItemCollapsibleState.None);
+      }
+    }
+    if (element.group?.parentId) {
+      const parent = this.bookmarkManager.getGroup(element.group.parentId);
+      if (parent) {
+        return this.createGroupItem(parent, vscode.TreeItemCollapsibleState.None);
       }
     }
     return null;
@@ -137,9 +151,11 @@ export class FlowTreeProvider
 
   // ─── 创建树节点 ──────────────────────────────────
 
-  private createGroupItems(): FlowTreeItem[] {
-    const groups = this.bookmarkManager.getAllGroups();
-    if (groups.length === 0) {
+  private createGroupItems(parentId?: string): FlowTreeItem[] {
+    const groups = parentId
+      ? this.bookmarkManager.getChildGroups(parentId)
+      : this.bookmarkManager.getTopLevelGroups();
+    if (groups.length === 0 && !parentId) {
       return [this.createEmptyAllItem()];
     }
     return groups.map((g) => this.createGroupItem(g, vscode.TreeItemCollapsibleState.Collapsed));
@@ -214,6 +230,7 @@ export class FlowTreeProvider
     const fileName = bookmark.filePath.split('/').pop() || bookmark.filePath;
     const lineNum = bookmark.line + 1;
 
+    // 标题：文件名:行号
     const displayLabel = `${stepNum}. ${fileName}:${lineNum}`;
 
     const item = new FlowTreeItem(
@@ -223,7 +240,15 @@ export class FlowTreeProvider
       vscode.TreeItemCollapsibleState.None
     );
 
-    item.description = bookmark.label || '';
+    // 描述：函数名（仅名称，不含参数） > 标签
+    const descParts: string[] = [];
+    if (bookmark.functionName) {
+      // 去掉参数部分：handleLogin(params) -> handleLogin
+      const shortName = bookmark.functionName.replace(/\(.*$/, '').trim();
+      if (shortName) descParts.push(shortName);
+    }
+    if (bookmark.label) descParts.push(bookmark.label);
+    item.description = descParts.join(' · ');
     item.tooltip = this.buildBookmarkTooltip(bookmark, isCurrent);
 
     if (isCurrent) {

@@ -99,6 +99,11 @@
         "icon": "$(new-folder)"
       },
       {
+        "command": "codeFlow.createSubGroup",
+        "title": "CF: Create Sub-group",
+        "icon": "$(folder-library)"
+      },
+      {
         "command": "codeFlow.setActiveGroup",
         "title": "CF: Set Active Group",
         "icon": "$(folder-active)"
@@ -147,6 +152,16 @@
         "command": "codeFlow.unhideGroup",
         "title": "CF: Unhide Group",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "codeFlow.exportBookmarks",
+        "title": "CF: Export Bookmarks to JSON",
+        "icon": "$(save-as)"
+      },
+      {
+        "command": "codeFlow.importBookmarks",
+        "title": "CF: Import Bookmarks from JSON",
+        "icon": "$(folder-opened)"
       },
       {
         "command": "codeFlow.openSettingsMenu",
@@ -234,6 +249,11 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "codeFlow.createSubGroup",
+          "group": "group@0",
+          "when": "view == codeFlow.flowTree && viewItem =~ /flowGroup/"
+        },
         {
           "command": "codeFlow.importFlowMD",
           "group": "inline@0",

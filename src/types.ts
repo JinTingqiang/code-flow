@@ -8,6 +8,8 @@ export interface FlowGroup {
   id: string;
   /** 分组名称 */
   name: string;
+  /** 父分组 ID（空 = 顶级分组） */
+  parentId?: string;
   /** 分组颜色 */
   color?: string;
   /** 分组排序 */
@@ -36,6 +38,8 @@ export interface FlowBookmark {
   character: number;
   /** 行内容指纹（用于跨会话恢复定位） */
   lineFingerprint?: string;
+  /** 所在函数/方法名（自动检测） */
+  functionName?: string;
   /** 可选的自定义标签 */
   label?: string;
   /** 在分组内的流程顺序（从0开始） */

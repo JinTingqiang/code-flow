@@ -5,6 +5,52 @@ import { FlowTreeProvider, FlowTreeItem } from './flowTreeProvider';
 import { FlowBookmark, FlowGroup } from './types';
 
 /**
+ * 获取某一行所在的函数/方法名
+ */
+async function getFunctionName(
+  uri: vscode.Uri,
+  line: number
+): Promise<string | undefined> {
+  try {
+    const symbols = await vscode.commands.executeCommand<
+      vscode.DocumentSymbol[]
+    >('vscode.executeDocumentSymbolProvider', uri);
+    if (!symbols || symbols.length === 0) return undefined;
+
+    // 递归查找包含该行的最内层函数/方法/类
+    function findEnclosing(
+      syms: vscode.DocumentSymbol[],
+      targetLine: number
+    ): string | undefined {
+      for (const sym of syms) {
+        const start = sym.range.start.line;
+        const end = sym.range.end.line;
+        if (targetLine >= start && targetLine <= end) {
+          // 优先找更内层的
+          const inner = findEnclosing(sym.children, targetLine);
+          if (inner) return inner;
+          // 只返回函数/方法/类
+          const kind = sym.kind;
+          if (
+            kind === vscode.SymbolKind.Function ||
+            kind === vscode.SymbolKind.Method ||
+            kind === vscode.SymbolKind.Class ||
+            kind === vscode.SymbolKind.Constructor
+          ) {
+            return sym.name;
+          }
+        }
+      }
+      return undefined;
+    }
+
+    return findEnclosing(symbols, line);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * 获取书签行的上下各 3 行作为内容指纹
  */
 function captureContextFingerprint(
@@ -109,7 +155,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Add After Current — 在当前书签之后插入 (Alt+Shift+F9)
   context.subscriptions.push(
-    vscode.commands.registerCommand('codeFlow.addAfterCurrent', () => {
+    vscode.commands.registerCommand('codeFlow.addAfterCurrent', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         return;
@@ -119,8 +165,9 @@ export function activate(context: vscode.ExtensionContext): void {
       const line = editor.selection.active.line;
       const character = editor.selection.active.character;
       const lineText = captureContextFingerprint(editor, line);
+      const funcName = await getFunctionName(editor.document.uri, line);
 
-      const result = bookmarkManager.addAfterCurrent(filePath, line, character, undefined, lineText);
+      const result = bookmarkManager.addAfterCurrent(filePath, line, character, undefined, lineText, funcName);
       const activeGroup = bookmarkManager.getActiveGroup();
       if (result) {
         // 刷新所有可见编辑器的装饰（序号变化需要反映在所有编辑器中）
@@ -144,7 +191,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Toggle Bookmark
   context.subscriptions.push(
-    vscode.commands.registerCommand('codeFlow.toggleBookmark', () => {
+    vscode.commands.registerCommand('codeFlow.toggleBookmark', async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor) {
         return;
@@ -154,8 +201,9 @@ export function activate(context: vscode.ExtensionContext): void {
       const line = editor.selection.active.line;
       const character = editor.selection.active.character;
       const lineText = captureContextFingerprint(editor, line);
+      const funcName = await getFunctionName(editor.document.uri, line);
 
-      const result = bookmarkManager.toggle(filePath, line, character, undefined, lineText);
+      const result = bookmarkManager.toggle(filePath, line, character, undefined, lineText, funcName);
       const activeGroup = bookmarkManager.getActiveGroup();
       if (result) {
         vscode.window.showInformationMessage(
@@ -195,13 +243,14 @@ export function activate(context: vscode.ExtensionContext): void {
         const line = editor.selection.active.line;
         const character = editor.selection.active.character;
         const lineText = captureContextFingerprint(editor, line);
+        const funcName = await getFunctionName(editor.document.uri, line);
 
         const existing = bookmarkManager.findByLocation(filePath, line);
         if (existing) {
           bookmarkManager.rename(existing.id, label);
           vscode.window.showInformationMessage(`🏷️ 书签已重命名为: ${label}`);
         } else {
-          bookmarkManager.add(filePath, line, character, label, lineText);
+          bookmarkManager.add(filePath, line, character, label, lineText, funcName);
           vscode.window.showInformationMessage(`✅ 流程书签 "${label}" 已添加`);
         }
         decorationManager.updateEditorDecorations(editor);
@@ -431,6 +480,32 @@ export function activate(context: vscode.ExtensionContext): void {
 
       bookmarkManager.createGroup(name.trim(), color);
       vscode.window.showInformationMessage(`📁 分组 "${name}" 已创建`);
+    })
+  );
+
+  // Create Sub-group
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeFlow.createSubGroup', async (arg: unknown) => {
+      const parentGroup = extractGroup(arg);
+      const parentId = parentGroup?.id;
+
+      const name = await vscode.window.showInputBox({
+        prompt: parentGroup
+          ? `为 "${parentGroup.name}" 创建子分组`
+          : '输入子分组名称',
+        placeHolder: '例如：用户验证子流程',
+        validateInput: (value) => {
+          if (!value.trim()) return '分组名称不能为空';
+          if (value.length > 50) return '名称不能超过50个字符';
+          return null;
+        },
+      });
+      if (!name) return;
+
+      bookmarkManager.createGroup(name.trim(), undefined, undefined, parentId);
+      vscode.window.showInformationMessage(
+        `📁 子分组 "${name}" 已创建${parentGroup ? '在 "' + parentGroup.name + '" 中' : ''}`
+      );
     })
   );
 
@@ -711,6 +786,72 @@ export function activate(context: vscode.ExtensionContext): void {
         }
       }
     )
+  );
+
+  // Export / Import Bookmarks
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeFlow.exportBookmarks', async () => {
+      const groups = bookmarkManager.getAllGroups();
+      const bookmarks = bookmarkManager.getAll();
+      const state = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        groups,
+        bookmarks,
+        activeGroupId: bookmarkManager.getActiveGroupId(),
+      };
+
+      const uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file('code-flow-bookmarks.json'),
+        filters: { 'JSON Files': ['json'] },
+        saveLabel: '导出书签',
+      });
+      if (!uri) return;
+
+      const data = Buffer.from(JSON.stringify(state, null, 2), 'utf-8');
+      await vscode.workspace.fs.writeFile(uri, data);
+      vscode.window.showInformationMessage(
+        `✅ 已导出 ${groups.length} 个分组、${bookmarks.length} 个书签`
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('codeFlow.importBookmarks', async () => {
+      const files = await vscode.window.showOpenDialog({
+        canSelectFiles: true,
+        canSelectMany: false,
+        filters: { 'JSON Files': ['json'] },
+        openLabel: '导入书签',
+      });
+      if (!files || files.length === 0) return;
+
+      try {
+        const data = await vscode.workspace.fs.readFile(files[0]);
+        const state = JSON.parse(Buffer.from(data).toString('utf-8'));
+
+        if (!state.groups || !state.bookmarks) {
+          vscode.window.showErrorMessage('无效的书签文件格式');
+          return;
+        }
+
+        const answer = await vscode.window.showWarningMessage(
+          `将导入 ${state.groups.length} 个分组、${state.bookmarks.length} 个书签，当前数据将被替换。确认？`,
+          { modal: true },
+          '确认导入'
+        );
+        if (answer !== '确认导入') return;
+
+        // 直接替换内部数据
+        bookmarkManager.importState(state);
+        decorationManager.refreshDecorationTypes();
+        vscode.window.showInformationMessage(
+          `✅ 已导入 ${state.groups.length} 个分组、${state.bookmarks.length} 个书签`
+        );
+      } catch {
+        vscode.window.showErrorMessage('无法读取或解析文件');
+      }
+    })
   );
 
   // Clear Group Bookmarks

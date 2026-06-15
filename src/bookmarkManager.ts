@@ -71,6 +71,20 @@ export class BookmarkManager {
     return [...this.groups];
   }
 
+  /** 获取顶级分组（无 parentId） */
+  getTopLevelGroups(): FlowGroup[] {
+    return this.groups
+      .filter((g) => !g.parentId)
+      .sort((a, b) => a.order - b.order);
+  }
+
+  /** 获取子分组 */
+  getChildGroups(parentId: string): FlowGroup[] {
+    return this.groups
+      .filter((g) => g.parentId === parentId)
+      .sort((a, b) => a.order - b.order);
+  }
+
   getGroup(id: string): FlowGroup | undefined {
     return this.groups.find((g) => g.id === id);
   }
@@ -83,7 +97,7 @@ export class BookmarkManager {
     return this.activeGroupId;
   }
 
-  createGroup(name: string, color?: string, mdPath?: string): FlowGroup {
+  createGroup(name: string, color?: string, mdPath?: string, parentId?: string): FlowGroup {
     const id = this.generateId();
     const group: FlowGroup = {
       id,
@@ -92,6 +106,7 @@ export class BookmarkManager {
       order: this.groups.length,
       hidden: false,
       mdPath,
+      parentId,
       createdAt: Date.now(),
     };
     this.groups.push(group);
@@ -142,6 +157,26 @@ export class BookmarkManager {
     this.persist();
     this._onDidChangeGroups.fire(this.getAllGroups());
     return true;
+  }
+
+  /**
+   * 从导入数据替换当前状态
+   */
+  importState(state: BookmarksState): void {
+    this.groups = state.groups || [];
+    this.bookmarks = state.bookmarks || [];
+    this.activeGroupId = state.activeGroupId || '';
+    this.currentIndex = state.currentIndex ?? -1;
+    this.nextOrder = state.nextOrder ?? 0;
+    this.groups.sort((a, b) => a.order - b.order);
+    this.bookmarks.sort((a, b) => a.order - b.order);
+    if (this.groups.length === 0) {
+      this.createDefaultGroup();
+    }
+    this.persist();
+    this._onDidChangeGroups.fire(this.getAllGroups());
+    this._onDidChangeBookmarks.fire(this.getAll());
+    this._onDidChangeActiveGroup.fire(this.activeGroupId);
   }
 
   /**
@@ -293,7 +328,7 @@ export class BookmarkManager {
   /**
    * 在当前书签之后插入新书签（Alt+Shift+F9）
    */
-  addAfterCurrent(filePath: string, line: number, character: number, label?: string, lineText?: string): FlowBookmark | null {
+  addAfterCurrent(filePath: string, line: number, character: number, label?: string, lineText?: string, functionName?: string): FlowBookmark | null {
     const groupBookmarks = this.getBookmarksByGroup(this.activeGroupId);
     if (groupBookmarks.length === 0) {
       return this.add(filePath, line, character, label);
@@ -326,6 +361,7 @@ export class BookmarkManager {
       character,
       label,
       lineFingerprint: lineText?.trim() || undefined,
+      functionName,
       order: insertOrder,
       createdAt: Date.now(),
     };
@@ -344,19 +380,19 @@ export class BookmarkManager {
   /**
    * 切换书签 — 在活动分组中添加/移除
    */
-  toggle(filePath: string, line: number, character: number, label?: string, lineText?: string): FlowBookmark | null {
+  toggle(filePath: string, line: number, character: number, label?: string, lineText?: string, functionName?: string): FlowBookmark | null {
     const existing = this.findByLocation(filePath, line, this.activeGroupId);
     if (existing) {
       this.remove(existing.id);
       return null;
     }
-    return this.add(filePath, line, character, label, lineText);
+    return this.add(filePath, line, character, label, lineText, functionName);
   }
 
   /**
    * 添加书签到活动分组末尾
    */
-  add(filePath: string, line: number, character: number, label?: string, lineText?: string): FlowBookmark {
+  add(filePath: string, line: number, character: number, label?: string, lineText?: string, functionName?: string): FlowBookmark {
     const groupBookmarks = this.getBookmarksByGroup(this.activeGroupId);
     const id = this.generateId();
     const bookmark: FlowBookmark = {
@@ -367,6 +403,7 @@ export class BookmarkManager {
       character,
       label,
       lineFingerprint: lineText?.trim() || undefined,
+      functionName,
       order: groupBookmarks.length,
       createdAt: Date.now(),
     };
